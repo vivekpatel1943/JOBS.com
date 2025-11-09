@@ -1,0 +1,117 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id String @id @default(uuid()) //primary key 
+  email String @unique 
+  password String
+  isEmailVerified Boolean @default(false)
+
+  // a user should be able to upload as many images as he wants with some limits like 10 or something as that would help him inspire trust on the potential employers 
+  userImages UserImage[] 
+
+  // relations
+  // a user cab either be an employer or a worker 
+  employerJobs Job[] @relation("EmployerJobs")  
+  workerJobs Job[] @relation("WorkerJobs")
+
+  // the relationship between the User model and the JobApplication model will be one to many as a user can send many job applications
+  jobApplications JobApplication[]
+}
+
+// this will be a one to many relationship between the User and UserImage tables as a user can upload many images though i would eventually like it to have some limits on the number of images a user can upload 
+model UserImage{
+  id String @id @default(uuid())
+  imageURL String
+
+  // userId 
+  userId String //foreign key (primary key in the parent table)
+  // specifies that userId refers to the id field in the User table 
+  user User @relation(fields:[userId],references:[id]) //relation field to User
+}
+
+
+model Job {
+  id String @id @default(uuid())
+  title String
+  description String 
+  address String
+  timing String //when do you want the worker to arrive  
+
+  // Helps in geolocation filtering 
+  latitude  Float?
+  longitude Float?
+
+  // negotiation-related fields
+  offer Int? //initial offer by employer
+  agreedRate String? //final agreed price once negotiation succeeds
+  // if someone chooses INR , it would mean that the whole transaction is locked in INR or the employer can carry out the transaction only in INR 
+  currency String? //e.g. "INR" (optional for global scaling)
+
+  // status control  , the values could be open ,in_progress, completed , cancelled
+  status String @default("open")
+
+  // Reach , local | citywide | countrywide | worldwide 
+  reach String 
+
+  // Payment
+  paid Boolean @default(false)//whether payment has been made
+  paymentDate DateTime? //date when the payment is made
+  platformFee Int? //5% cut value (can calculate dynamically , but store it for invoice)
+  
+  // ratings
+  workerRating Int? //rated by the employer
+  employerRating Int? //rated by the worker 
+
+  // Invoice tracking
+  invoiceUrl String? //generated invoice file link
+
+  // Meta 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employerId String //foreign key (refers to the primary key of the parent model)
+  // specifies that employerId refers to the id of the User model
+  employer User @relation("EmployerJobs",fields: [employerId], references: [id])
+
+  workerId String? //id of the assigned worker , workerId , once the job has been accepted 
+  worker User? @relation("WorkerJobs",fields: [workerId],references: [id])
+
+  //the Job table will have a one to many relationship with the JobApplication table, as there can be many JobApplications by many people for one job,
+  applications JobApplication[]
+}
+
+model JobApplication {
+  id String @id @default(uuid())
+
+  status String @default("pending") //pending , accepted , rejected 
+  createdAt DateTime @default(now())
+
+  // here we would like the worker to pitch himself as to why he is a better candidate for the job
+  offerDetails String
+
+  // refers to the jobId of the Job being applying to , 
+  jobId String //foreign key
+  // this tells that jobId refers to the id field of Job table
+  job Job @relation(fields:[jobId], references: [id]) 
+
+  // workerId
+  workerId String
+  
+  // who was the employer, 
+  employerId String
+  employer User @relation(fields: [employerId], references: [id])
+}
